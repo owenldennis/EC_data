@@ -9,28 +9,18 @@ Cross referencing of multiple csv files in order to extract the names of pupils 
 """
 
 import pandas as pd
-import csv
-import matplotlib.pyplot as plt
-import random 
+#import csv
+from numbers import Number
+#import random 
 import numpy as np
-import openpyxl
-from sklearn.linear_model import LinearRegression
+#import openpyxl
 
 # source data directory from onedrive
 SOURCE_DATA_DIR = "C:/Users/owen/OneDrive - Eastbourne College/School analytics project"
 
 # MidYIS excel files are imported as multi-level column dataframes.
-# default constants for selecting data
-TUPLES = [('MidYIS', 'Overall Score'), ('Pupil Information', 'Surname')]
-SUBJECT = 'Mathematics'
-CRITERIA = 'Predicted GCSE Points'# options include 'Predicted GCSE Points'
-TUPLES.append((SUBJECT, CRITERIA))
-
-
-
-
 # Decide which data to analyse
-USE_NUMERICAL_GRADING_DATA = False
+USE_NUMERICAL_GRADING_DATA = True
 USE_OLD_GRADING_DATA = True
 REMOVE_CAGS_TAGS = False
 #print(TUPLES)
@@ -51,70 +41,112 @@ else:
                      'Yr 9 2017_18 (9-1)', 'Yr 9 2018_19 (9-1)']
 
 SHEETS = SHEET_TITLES_OLD
+
 if USE_NUMERICAL_GRADING_DATA:
     if USE_OLD_GRADING_DATA:
         SHEETS = SHEET_TITLES_OLD + SHEET_TITLES_NEW
     else:
         SHEETS = SHEET_TITLES_NEW
+
+# struture of original midYIS datafiles
+SUBJECTS = ['Art & Design', 'Biology', 'Chemistry', 'Classical Civilisation', 
+            'Design & Technology', 'Drama', 'English', 'English Literature', 
+            'French', 'Geography', 'German', 'History', 'Latin', 'Mathematics', 
+            'Music', 'Physical Education', 'Physics', 'Religious Studies', 'Science (Double)', 'Spanish']
+
+SUBJECT_OPTIONS = ['Actual GCSE Points', 'Cemid', 'Cust', 
+                   'Overall Band', 'Overall Score', 'Predicted GCSE Points', 
+                   'Raw Residual', 'Standardised Residual',]
+
+MIDYIS_OPTIONS = ['Overall Score', 'Overall Band']
+
+PUPIL_INFO_OPTIONS = ['Forename', 'Predicted GCSE Points', 'Sex', 'Surname']
+
+def select_frames(dict_of_dfs, keys, tuples): 
     
-# load all excel sheets from 2012 to 2018
-midyis_and_GCSE_data = pd.read_excel(SOURCE_DATA_DIR + "/MidYIS_average_and_GCSE_scores.xlsm",
-                                 sheetname = None,
-                            header = [0,1])
-
-
-def select_frames(dict_of_dfs = midyis_and_GCSE_data, keys = SHEET_TITLES_OLD,
-                  subject = 'Mathematics', criteria = 'Actual GCSE Points'):   
     valid_sheets = []
     for key in keys:
         try:
-            midyis_and_GCSE_data[key][TUPLES]
+            dict_of_dfs[key][tuples]
             valid_sheets.append(key)
         except KeyError:
             pass
     return valid_sheets
 
-def clean_data(data, verbose = False, remove_any_non_numeric_grades = True):
+#def is_number(entry):
+#    if type(entry) == int:
+#        return True
+#    if type(entry) == float:
+#        return True
+#    if type(entry) == 'numpy.float64':
+#        return True
+#    
+#    return False#
+#
+#def find_numeric_entries(series):
+#    return [is_number(s) for s in series]    
+
+def clean_data(data, subject,  criteria, remove_non_numeric_values = True,
+               verbose = False):
+    
     raw_length = len(data.index)
     data = data.dropna()
     nan_removed_length = len(data.index)
-    #data = data[data[(SUBJECT, CRITERIA)] != 'U']
-    #U_removed_length = len(data.index)
     
-    if remove_any_non_numeric_grades:
-        data = data[data[(SUBJECT, CRITERIA)].isin(range(1,10))]#['1','2','3','4','5','6','7','8','9'])]
+    if remove_non_numeric_values:
+        selected = data[(subject, criteria)]
+        number_match = [isinstance(s, Number) for s in selected]
+        not_number = [not n for n in number_match]
+        data = data[number_match]
         only_numeric_length = len(data.index)
+        removed_entries = list(set(selected[not_number]))
     else:
         only_numeric_length = "Not done"
+        removed_entries = "Not done"
     
-    if verbose:
-        summary_dict = {"Initial dataset length" : [raw_length],
+
+    summary_dict = {"Initial dataset length" : [raw_length],
                                         "After removing NaN entries" : [nan_removed_length],
                                         #"After removing U grades" : [U_removed_length],
-                                        "After removing other non-numeric grades" : [only_numeric_length],
+                                        "After removing other non-numeric values" : [only_numeric_length],
+                                        "Removed entries other than NaN" : [removed_entries]
                                         }
-        display(pd.DataFrame.from_dict(summary_dict, orient = 'index').rename({0 : "Length"}))#, columns = ['Length']))
-        print("\n")
-    return data
+    summary_df = pd.DataFrame.from_dict(summary_dict, orient = 'index')#.columns = ['Length']
+    summary_df.columns = ['length']
+        
+    return data, summary_df
+ 
+
+
+def extract_GCSE_and_midYIS_data(subject = 'Mathematics', criteria = 'Actual GCSE Points',
+                                 remove_non_numeric_values = True, verbose = False):
     
-# pull out specific columns for a dataframe (relates to constants above) and concatenate
-valid_sheets = select_frames(keys = SHEETS, subject = SUBJECT, criteria = CRITERIA)
-print("The valid sheet titles for this analysis are :{0}\n".format(valid_sheets))
-data = pd.concat([midyis_and_GCSE_data[sheet][TUPLES] for sheet in valid_sheets],
+    # load all excel sheets from 2012 to 2018
+    midyis_and_GCSE_data = pd.read_excel(SOURCE_DATA_DIR + "/MidYIS_average_and_GCSE_scores.xlsm",
+                                 sheetname = None,
+                            header = [0,1]) 
+
+    
+    tuples = [('MidYIS', 'Overall Score'), ('Pupil Information', 'Surname'), (subject, criteria)]
+    # add (subject, criteria) tuple to multicolumn tuples to extract relevant data
+
+    # pull out specific columns for a dataframe (relates to constants above) and concatenate
+    valid_sheets = select_frames(dict_of_dfs = midyis_and_GCSE_data, keys = SHEETS, 
+                                 tuples = tuples)
+    
+    if verbose:
+        print("The valid sheet titles for this analysis are :{0}\n".format(valid_sheets))
+    
+    # extract and combine all relevant data into one dataframe   
+    data = pd.concat([midyis_and_GCSE_data[sheet][tuples] for sheet in valid_sheets],
                   ignore_index = True)
-
-data = clean_data(data, remove_any_non_numeric_grades = False, verbose = True)
-
-
-#display(data.head(10))
-#print(data.columns)
-plt.scatter(data[('MidYIS', 'Overall Score')], data[SUBJECT, CRITERIA])
-X = data[('MidYIS', 'Overall Score')].values.reshape(-1,1)
-y = data[SUBJECT, CRITERIA].values
-linreg = LinearRegression().fit(X, y)
-
-print("Regression gives R^2 score of {0:.2f}".format(linreg.score(X, y)))
-
+    
+    # clean data - if verbose is true, summary of removed items is printed
+    data, removed_rows_summary = clean_data(data, subject = subject, criteria = criteria,
+                                            remove_non_numeric_values = remove_non_numeric_values,
+                                            verbose = verbose)
+    
+    return data, removed_rows_summary
 
 
 

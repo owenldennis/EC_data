@@ -5,6 +5,7 @@ obsolete functions
 
 @author: owen
 """
+import pandas as pd
 
 def test_with_mini_df():
     mini_df = results_dataframe[['Pupil Id', 'Programme Id']].head(10)   
@@ -25,6 +26,28 @@ def get_prog_name(prog_id):
 def new_col_from_crossref(col_to_cross_ref, df_to_read, keys_col_heading, vals_col_heading):
     crossref_dict = make_crossref_dict(df_to_read, keys_col_heading, vals_col_heading)
     return [crossref_dict[col_entry] for col_entry in col_to_cross_ref]
+
+def is_number(entry):
+    if type(entry) == 'int':
+        return True
+    if type(entry) == 'float':
+        return True
+    
+    return False
+
+def find_numeric_entries(series):
+    return [is_number(s) for s in series]
+    
+df = pd.DataFrame(
+    [
+        [24.3, 75.7, "high"],
+        [31, 87.8, "high"],
+        [22, 71.6, "medium"],
+        [35, 95, "medium"],
+    ],
+    columns=["temp_celsius", "temp_fahrenheit", "windspeed"])
+
+display(df)
 
 # create cross-ref dictionaries
 #codes_to_subjects = make_crossref_dict(programmes_subjects_df, 'Programme_Id', 'Name') 
