@@ -17,12 +17,12 @@ import numpy as np
 
 # source data directory from onedrive
 SOURCE_DATA_DIR = "C:/Users/owen/OneDrive - Eastbourne College/School analytics project"
-
+RESULTS_DIR = "C:/Users/owen/OneDrive - Eastbourne College/School analytics project/Results"
 # MidYIS excel files are imported as multi-level column dataframes.
 # Decide which data to analyse
-USE_NUMERICAL_GRADING_DATA = True
-USE_OLD_GRADING_DATA = True
-REMOVE_CAGS_TAGS = False
+#USE_NUMERICAL_GRADING_DATA = True
+#USE_OLD_GRADING_DATA = True
+#REMOVE_CAGS_TAGS = False
 #print(TUPLES)
 
 """
@@ -33,21 +33,26 @@ list of excel sheet titles (keys for extracted dictionary)
 'Yr 9 2016_17 (9-1)', 'Yr 9 2017_18 (9-1)', 'Yr 9 2018_19 (9-1)'  ***all subjects graded 1-9***  
 ]
 """
-SHEET_TITLES_OLD = ['Yr 9 2012_13', 'Yr 9 2013_14', 'Yr 9 2014_15', 'Yr 9 2015_16']
-if REMOVE_CAGS_TAGS:
-    SHEET_TITLES_NEW = ['Yr 9 2014_15 (9-1)', 'Yr 9 2015_16 (9-1)','Yr 9 2016_17 (9-1)']
-else:
-    SHEET_TITLES_NEW =  ['Yr 9 2014_15 (9-1)', 'Yr 9 2015_16 (9-1)','Yr 9 2016_17 (9-1)', 
-                     'Yr 9 2017_18 (9-1)', 'Yr 9 2018_19 (9-1)']
+#SHEET_TITLES_OLD = ['Yr 9 2012_13', 'Yr 9 2013_14', 'Yr 9 2014_15', 'Yr 9 2015_16']
+#if REMOVE_CAGS_TAGS:
+#    SHEET_TITLES_NEW = ['Yr 9 2014_15 (9-1)', 'Yr 9 2015_16 (9-1)','Yr 9 2016_17 (9-1)']
+#else:
+#    SHEET_TITLES_NEW =  ['Yr 9 2014_15 (9-1)', 'Yr 9 2015_16 (9-1)','Yr 9 2016_17 (9-1)', 
+ #                    'Yr 9 2017_18 (9-1)', 'Yr 9 2018_19 (9-1)']
 
-SHEETS = SHEET_TITLES_OLD
+#SHEETS = SHEET_TITLES_OLD##
 
-if USE_NUMERICAL_GRADING_DATA:
-    if USE_OLD_GRADING_DATA:
-        SHEETS = SHEET_TITLES_OLD + SHEET_TITLES_NEW
-    else:
-        SHEETS = SHEET_TITLES_NEW
+#if USE_NUMERICAL_GRADING_DAT#A:
+#    if USE_OLD_GRADING_DATA:
+#        SHEETS = SHEET_TITLES_OLD + SHEET_TITLES_NEW
+#    else:
+#        SHEETS = SHEET_TITLES_NEW
 
+ALL_YEARS = ['Yr 9 2012_13', 'Yr 9 2013_14',  #***all subjects graded 1-8 on CEM scale***
+             'Yr 9 2014_15', 'Yr 9 2014_15 (9-1)', #***all except English graded 1-8)***
+             'Yr 9 2015_16', 'Yr 9 2015_16 (9-1)', #***just a few pupils in maths, history and DT graded 1-8 still*** 
+             'Yr 9 2016_17 (9-1)', 'Yr 9 2017_18 (9-1)', 'Yr 9 2018_19 (9-1)' # ***all subjects graded 1-9***  
+             ]
 # struture of original midYIS datafiles
 SUBJECTS = ['Art & Design', 'Biology', 'Chemistry', 'Classical Civilisation', 
             'Design & Technology', 'Drama', 'English', 'English Literature', 
@@ -60,31 +65,19 @@ SUBJECT_OPTIONS = ['Actual GCSE Points', 'Cemid', 'Cust',
 
 MIDYIS_OPTIONS = ['Overall Score', 'Overall Band']
 
-PUPIL_INFO_OPTIONS = ['Forename', 'Predicted GCSE Points', 'Sex', 'Surname']
+PUPIL_INFO_OPTIONS = ['Forename', 'Sex', 'Surname']
 
 def select_frames(dict_of_dfs, keys, tuples): 
     
-    valid_sheets = []
+    valid_years = []
     for key in keys:
         try:
             dict_of_dfs[key][tuples]
-            valid_sheets.append(key)
+            valid_years.append(key)
         except KeyError:
             pass
-    return valid_sheets
+    return valid_years
 
-#def is_number(entry):
-#    if type(entry) == int:
-#        return True
-#    if type(entry) == float:
-#        return True
-#    if type(entry) == 'numpy.float64':
-#        return True
-#    
-#    return False#
-#
-#def find_numeric_entries(series):
-#    return [is_number(s) for s in series]    
 
 def clean_data(data, subject,  criteria, remove_non_numeric_values = True,
                verbose = False):
@@ -118,7 +111,7 @@ def clean_data(data, subject,  criteria, remove_non_numeric_values = True,
  
 
 
-def extract_GCSE_and_midYIS_data(subject = 'Mathematics', criteria = 'Actual GCSE Points',
+def extract_GCSE_and_midYIS_data(years = ALL_YEARS, subject = 'Mathematics', criteria = 'Actual GCSE Points',
                                  remove_non_numeric_values = True, verbose = False):
     
     # load all excel sheets from 2012 to 2018
@@ -127,24 +120,32 @@ def extract_GCSE_and_midYIS_data(subject = 'Mathematics', criteria = 'Actual GCS
                             header = [0,1]) 
 
     
-    tuples = [('MidYIS', 'Overall Score'), ('Pupil Information', 'Surname'), (subject, criteria)]
+    tuples = [('Pupil Information', 'Surname'),('Pupil Information', 'Forename'),('Pupil Information', 'Sex'),              
+              ('MidYIS', 'Overall Score'), (subject, criteria)
+              ]
     # add (subject, criteria) tuple to multicolumn tuples to extract relevant data
 
     # pull out specific columns for a dataframe (relates to constants above) and concatenate
-    valid_sheets = select_frames(dict_of_dfs = midyis_and_GCSE_data, keys = SHEETS, 
+    valid_years = select_frames(dict_of_dfs = midyis_and_GCSE_data, keys = years, 
                                  tuples = tuples)
     
     if verbose:
-        print("The valid sheet titles for this analysis are :{0}\n".format(valid_sheets))
+        print("The valid sheet titles for this analysis are :{0}\n".format(valid_years))
     
     # extract and combine all relevant data into one dataframe   
-    data = pd.concat([midyis_and_GCSE_data[sheet][tuples] for sheet in valid_sheets],
+    try:
+        data = pd.concat([midyis_and_GCSE_data[year][tuples] for year in valid_years],
                   ignore_index = True)
-    
-    # clean data - if verbose is true, summary of removed items is printed
-    data, removed_rows_summary = clean_data(data, subject = subject, criteria = criteria,
+        # clean data - if verbose is true, summary of removed items is printed
+        data, removed_rows_summary = clean_data(data, subject = subject, criteria = criteria,
                                             remove_non_numeric_values = remove_non_numeric_values,
                                             verbose = verbose)
+    except ValueError:
+        if not valid_years:
+            print("No matching data found")
+            return pd.DataFrame(), None
+        else:
+            print("Not sure what's gone wrong!")
     
     return data, removed_rows_summary
 
