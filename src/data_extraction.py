@@ -2,9 +2,10 @@
 """
 Spyder Editor
 
-Pupil data for Eastbourne College project
+FUnctions for extracting data from CEM excel files for Eastbourne College project
 This file contains functions to set up a dataframe containing all relevant information.
-Cross referencing of multiple csv files in order to extract the names of pupils and courses based on numerical codes
+
+Below, there are (obsolete) functions for cross referencing of multiple csv files in order to extract the names of pupils and courses based on numerical codes
 
 """
 
@@ -13,17 +14,18 @@ import pandas as pd
 from numbers import Number
 #import random 
 import numpy as np
-#import openpyxl
+import tabula
+import re
+import name_disambiguation as name_dis
 
 # source data directory from onedrive
 SOURCE_DATA_DIR = "C:/Users/owen/OneDrive - Eastbourne College/School analytics project"
 RESULTS_DIR = "C:/Users/owen/OneDrive - Eastbourne College/School analytics project/Results"
+
+
+
 # MidYIS excel files are imported as multi-level column dataframes.
-# Decide which data to analyse
-#USE_NUMERICAL_GRADING_DATA = True
-#USE_OLD_GRADING_DATA = True
-#REMOVE_CAGS_TAGS = False
-#print(TUPLES)
+
 
 """
 list of excel sheet titles (keys for extracted dictionary)
@@ -33,20 +35,7 @@ list of excel sheet titles (keys for extracted dictionary)
 'Yr 9 2016_17 (9-1)', 'Yr 9 2017_18 (9-1)', 'Yr 9 2018_19 (9-1)'  ***all subjects graded 1-9***  
 ]
 """
-#SHEET_TITLES_OLD = ['Yr 9 2012_13', 'Yr 9 2013_14', 'Yr 9 2014_15', 'Yr 9 2015_16']
-#if REMOVE_CAGS_TAGS:
-#    SHEET_TITLES_NEW = ['Yr 9 2014_15 (9-1)', 'Yr 9 2015_16 (9-1)','Yr 9 2016_17 (9-1)']
-#else:
-#    SHEET_TITLES_NEW =  ['Yr 9 2014_15 (9-1)', 'Yr 9 2015_16 (9-1)','Yr 9 2016_17 (9-1)', 
- #                    'Yr 9 2017_18 (9-1)', 'Yr 9 2018_19 (9-1)']
 
-#SHEETS = SHEET_TITLES_OLD##
-
-#if USE_NUMERICAL_GRADING_DAT#A:
-#    if USE_OLD_GRADING_DATA:
-#        SHEETS = SHEET_TITLES_OLD + SHEET_TITLES_NEW
-#    else:
-#        SHEETS = SHEET_TITLES_NEW
 
 ALL_YEARS = ['Yr 9 2012_13', 'Yr 9 2013_14',  #***all subjects graded 1-8 on CEM scale***
              'Yr 9 2014_15', 'Yr 9 2014_15 (9-1)', #***all except English graded 1-8)***
@@ -100,7 +89,6 @@ def clean_data(data, subject,  criteria, remove_non_numeric_values = True,
 
     summary_dict = {"Initial dataset length" : [raw_length],
                                         "After removing NaN entries" : [nan_removed_length],
-                                        #"After removing U grades" : [U_removed_length],
                                         "After removing other non-numeric values" : [only_numeric_length],
                                         "Removed entries other than NaN" : [removed_entries]
                                         }
@@ -111,20 +99,23 @@ def clean_data(data, subject,  criteria, remove_non_numeric_values = True,
  
 
 
-def extract_GCSE_and_midYIS_data(years = ALL_YEARS, subject = 'Mathematics', criteria = 'Actual GCSE Points',
+def extract_GCSE_and_midYIS_data(years = ALL_YEARS, subject = 'Mathematics', criteria = 'Actual GCSE Points',                                 
                                  remove_non_numeric_values = True, verbose = False):
     
     # load all excel sheets from 2012 to 2018
-    midyis_and_GCSE_data = pd.read_excel(SOURCE_DATA_DIR + "/MidYIS_average_and_GCSE_scores.xlsm",
-                                 sheetname = None,
-                            header = [0,1]) 
+    midyis_and_GCSE_data = {year : pd.read_excel(SOURCE_DATA_DIR + "/MidYIS_average_and_GCSE_scores.xlsm",
+                                 sheet_name = year,
+                            header = [0,1]) for year in ALL_YEARS 
+                            }
 
     
     tuples = [('Pupil Information', 'Surname'),('Pupil Information', 'Forename'),('Pupil Information', 'Sex'),              
               ('MidYIS', 'Overall Score'), (subject, criteria)
               ]
     # add (subject, criteria) tuple to multicolumn tuples to extract relevant data
-
+    #if verbose:
+    #    print("years are {0}".format(years))
+    #    print("Possible keys are {0}".format(midyis_and_GCSE_data.keys()))
     # pull out specific columns for a dataframe (relates to constants above) and concatenate
     valid_years = select_frames(dict_of_dfs = midyis_and_GCSE_data, keys = years, 
                                  tuples = tuples)
@@ -149,10 +140,35 @@ def extract_GCSE_and_midYIS_data(years = ALL_YEARS, subject = 'Mathematics', cri
     
     return data, removed_rows_summary
 
+"""
+Code for reading pdf files with exam marks 
+"""
+
+def read_pdfs(filepath):
+    #C:\Users\owen\OneDrive - Eastbourne College\School analytics project\Original data files\GCSE maths marks
+    data = tabula.read_pdf(filepath, pages = 'all')
+    return data
+    #print(df[0].head())
+    
+
+
+
+
+
+if __name__ == '__main__':
+    pass
+
+ 
+        
+        
+        
+        
+
 
 
 """
-Code below is used for collating information about EC pupils from the spreadsheets 
+Code below is used for collating information about EC pupils from the ECI spreadsheets 
+Spreadsheets are cross-referenced based on the unique ID codes
 """
 
 # rename columns for midyis data
@@ -184,13 +200,13 @@ def lookup_and_append_to_df(df_to_append, lookup_col_heading, new_col_heading,
         size = 10
         random_indices = np.random.randint(len(df_to_append.index), size = size)
         sampled_df = df_to_append[[lookup_col_heading, new_col_heading]].loc[random_indices, :].sort_values(by = lookup_col_heading)
-        display(sampled_df)
+        print(sampled_df)
         keys = df_to_append[lookup_col_heading].loc[random_indices]
         #print("Keys are: {0}".format(keys))
         df_mask = df_source.where(df_source[keys_col_heading].isin(keys))
         print("Matching rows from source dataframe")
         df_to_display = df_mask[[keys_col_heading, values_col_heading]].dropna().sort_values(by = keys_col_heading)
-        display(df_to_display)
+        print(df_to_display)
     
     if verbose:
         print("There were {0} unique entries in the lookup dataframe which could not be found in the source dataframe".format(len(set(missing_keys))))

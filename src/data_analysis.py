@@ -16,11 +16,13 @@ from scipy.stats import ttest_1samp
 import numpy as np
 
 
-def GCSE_on_midYIS_regression(years, subject = 'Mathematics', criteria = 'Actual GCSE Points', 
+def GCSE_on_midYIS_regression(years = de.ALL_YEARS, subject = 'Mathematics', criteria = 'Actual GCSE Points', 
                               display_results = False, verbose = False):
     
     # extract relevant data
-    data, removed_rows_summary = de.extract_GCSE_and_midYIS_data(years, subject = subject, criteria = criteria,
+    #if verbose:
+    #    print("Years to be extracted are : {0}".format(years))
+    data, removed_rows_summary = de.extract_GCSE_and_midYIS_data(years = years, subject = subject, criteria = criteria,
                                             remove_non_numeric_values = True,
                                             verbose = verbose)
     if not len(data.index):
@@ -29,7 +31,7 @@ def GCSE_on_midYIS_regression(years, subject = 'Mathematics', criteria = 'Actual
     # display scattergraph of data
     if display_results:
         plt.scatter(data[('MidYIS', 'Overall Score')], data[subject, criteria])
-        display(removed_rows_summary)
+        print(removed_rows_summary)
         plt.show()
     
         # linear regression
@@ -71,6 +73,7 @@ if __name__ == "__main__":
     
     n = random.randint(1,10)
     for subject in de.SUBJECTS[n:n+2]:
+        subject = 'Mathematics'
         GCSE_on_midYIS_regression(years = de.ALL_YEARS, subject = subject, 
-                                   display_results = True, verbose = False)
+                                   display_results = True, verbose = True)
         
