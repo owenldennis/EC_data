@@ -15,8 +15,8 @@ from numbers import Number
 #import random 
 import numpy as np
 import tabula
-import re
-import name_disambiguation as name_dis
+#import re
+#import name_disambiguation as name_dis
 
 # source data directory from onedrive
 SOURCE_DATA_DIR = "C:/Users/owen/OneDrive - Eastbourne College/School analytics project"
@@ -169,6 +169,8 @@ if __name__ == '__main__':
 """
 Code below is used for collating information about EC pupils from the ECI spreadsheets 
 Spreadsheets are cross-referenced based on the unique ID codes
+Probably all obsolete as the pd.merge() function does most of it!
+And turns out not to be needed as the exam results are stored in CEM data
 """
 
 # rename columns for midyis data

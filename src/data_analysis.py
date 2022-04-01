@@ -71,9 +71,11 @@ def do_ttest(results_dict,
      
 if __name__ == "__main__":
     
-    n = random.randint(1,10)
+    ### code below carries out a random sample of subjects and outputs results of linear regression and correlation analysis here.  
+    ### Jupyter notebook code uses the same function to create results for all subjects and save results
+    n = random.randint(1,len(de.SUBJECTS)- 2)
     for subject in de.SUBJECTS[n:n+2]:
-        subject = 'Mathematics'
+        #subject = 'Mathematics'
         GCSE_on_midYIS_regression(years = de.ALL_YEARS, subject = subject, 
                                    display_results = True, verbose = True)
         
