@@ -36,11 +36,11 @@ USABLE_YEARS = ['Yr 9 2013_14',  #***all subjects graded 1-8 on CEM scale***
                 'Yr 9 2016_17'
                 ]
 
-def name_formatting(name_string, return_key = 'Surname'):
+def name_formatting(name_string, return_key = 'Surname', surname_first = True):
     # use name_disambiguation function to split name string if suitable
     # return one of the names found depending on key passed
     if type(name_string) == str:
-        name_dict = name_dis.split_name(name_string, surname_first = True)
+        name_dict = name_dis.split_name(name_string, surname_first = surname_first)
         
         return name_dict[return_key]
     else:

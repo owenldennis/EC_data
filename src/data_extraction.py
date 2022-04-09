@@ -14,7 +14,7 @@ import pandas as pd
 from numbers import Number
 #import random 
 import numpy as np
-import tabula
+#import tabula
 #import re
 #import name_disambiguation as name_dis
 
@@ -140,23 +140,11 @@ def extract_GCSE_and_midYIS_data(years = ALL_YEARS, subject = 'Mathematics', cri
     
     return data, removed_rows_summary
 
-"""
-Code for reading pdf files with exam marks 
-"""
 
-def read_pdfs(filepath):
-    #C:\Users\owen\OneDrive - Eastbourne College\School analytics project\Original data files\GCSE maths marks
-    data = tabula.read_pdf(filepath, pages = 'all')
-    return data
-    #print(df[0].head())
+    
+    
     
 
-
-
-
-
-if __name__ == '__main__':
-    pass
 
  
         

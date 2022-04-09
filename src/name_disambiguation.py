@@ -23,6 +23,7 @@ def split_name(name_string, surname_first = False):
     middle_names = []
     
     name_string = re.sub(',', ' ', name_string)
+    name_string = re.sub(':', ' ', name_string)
     #print(name_string)
     name_string = re.sub('/.', ' ', name_string)
     #print(name_string)
