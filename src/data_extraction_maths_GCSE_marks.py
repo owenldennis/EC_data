@@ -15,23 +15,23 @@ The dataframes are then merged with the corresponding year from the maths depart
 
 import data_extraction as de
 import name_disambiguation as name_dis
-#import data_extraction_maths_dept as demaths
+import data_extraction_maths_dept as demaths
 import pandas as pd
 
-MATHS_TIME_SERIES_PATH = "{0}/Maths_scores_time_series".format(de.RESULTS_DIR)
-GCSE_MARKS_PATH = "{0}/Maths_GCSE_marks".format(de.RESULTS_DIR)
-GCSE_MARKS_TO_MATHS_TIME_SERIES_FILENAMES_DICT = {'GCSE_scores_2016.xlsx' : 'Yr 9 2013_14.csv',
-                         }
-"""
-Code for reading pdf files with exam marks 
-"""
 
-def read_pdfs(filepath):
-    #C:\Users\owen\OneDrive - Eastbourne College\School analytics project\Original data files\GCSE maths marks
-    #data = tabula.read_pdf(filepath, pages = 'all')
-    #return data
-    #print(df[0].head())
-    pass
+MATHS_TIME_SERIES_PATH = "{0}/Maths_scores_time_series".format(de.RESULTS_DIR)
+GCSE_MARKS_PATH = "{0}/Extracted data files/GCSE_marks_csvs_from_pdfs".format(de.SOURCE_DATA_DIR)
+GCSE_MARKS_TO_MATHS_TIME_SERIES_FILENAMES_DICT = {'GCSE_scores_2016.csv' : 'Yr 9 2013_14.csv',
+                                                  'GCSE_scores_2017.csv' : 'Yr 9 2014_15.csv',
+                                                  'GCSE_scores_2018.csv' : 'Yr 9 2015_16.csv',
+                                                  'GCSE_scores_2019.csv' : 'Yr 9 2016_17.csv'
+                                                  }
+
+#GCSE_MARKS_TO_MATHS_TIME_SERIES_FILENAMES_DICT.values()
+
+#YEARS = [year for year in de.ALL_YEARS if year in ]
+
+CSV_FILES_WITH_TOTAL_MARKS = ['GCSE_scores_2018.csv', 'GCSE_scores_2019.csv']
     
 
 
@@ -76,6 +76,12 @@ def find_next_data(df, i):
 ### If too many rows are iterated a warning and information is printed
 ### All rows with complete data are stored in a new dataframe and returned
 def extract_relevant_maths_scores(df, max_loops = 3):
+    """
+    * This function is only used for the excel GCSE marks files (from pdf converted to word, then copied into excel)
+    * Due to data protection issues this is not used at the moment.
+    *
+    """
+    
     #Ensure index is integers in order, store original index within dataframe
     df['Original index'] = df.index
     df.index = list(range(len(df.index))) 
@@ -112,44 +118,169 @@ def extract_relevant_maths_scores(df, max_loops = 3):
     return pd.DataFrame.from_dict(data, orient = 'index')
 
 
-def name_dis_wrapper(name_string, surname_first = True):
+def name_dis_wrapper(name_string, key, surname_first = True):
     name_dict = name_dis.split_name(name_string, surname_first = surname_first)
-    return name_dict['Surname'], name_dict['Forename'], name_dict['Middle names']
+    return name_dict[key]
+
 
 ### Uses the functions above to create a new dataframe with one row for each name
 ### Name is split into Surname, Forename and Middle names with a separate column for each                 
-def format_maths_GCSE_marks_into_dataframes(files_dict):
-    #path = "{0}/Original data files/GCSE maths marks".format(de.SOURCE_DATA_DIR)
-    #filename = "GCSE_scores_2016.pdf"
-    #word_filename = filename.replace("pdf", "docx")
-    #excel_filename = filename.replace("pdf", "xlsx")
+def format_maths_GCSE_marks_into_dataframes(csv_filename, excel_filename = "", path = GCSE_MARKS_PATH):
     
-    for excel_filename in files_dict.keys(): 
-        
+    if len(excel_filename):       
         # extract the data from the excel file containing raw GCSE maths marks data
-        marks_df = pd.read_excel("{0}/{1}".format(GCSE_MARKS_PATH, excel_filename), header = None)                          
+        # this is not currently the chosen route due to data protection issues with pdf file conversion online
+        marks_df = pd.read_excel("{0}/{1}".format(path, excel_filename), header = None)                          
         
         # create tidy dataframe with one row per pupil and rename columns
-        marks_df.columns = ['Name', 'Average Score', 'Grade', 'Paper 3H', 'Paper 4H']
+        marks_df.columns = ['Name', 'Average score', 'Grade', 'Paper 3H', 'Paper 4H']
         tidied_marks_df = extract_relevant_maths_scores(marks_df, max_loops = 3) 
         
-
-        # split name into forename, surname and middle names
-        print(tidied_marks_df.head())
-       
-        tidied_marks_df[['Surname', 'Forename', 'Middle names']] = tidied_marks_df['Name'].apply(lambda x: name_dis_wrapper(x))
+    else:
+        # csv files are being used - these have already been partially tidied
+        # however, marks in 2018 and 2019 are given as a total of two papers not the average - these must be adjusted
+        # Also, marks are stored as strings - these are changed to integers
+        tidied_marks_df = pd.read_csv("{0}/{1}".format(path, csv_filename), index_col = 0)
+        if csv_filename in CSV_FILES_WITH_TOTAL_MARKS:
+            tidied_marks_df['Average GCSE score'] = tidied_marks_df['Mark'].map(lambda x: int(round(x/2)))
+        else:
+            tidied_marks_df['Average GCSE score'] = tidied_marks_df['Mark'].map(lambda x: int(x))
+            
+    # split name into forename, surname and middle names    
+    for key in ['Surname', 'Forename']:
+        tidied_marks_df[key] = tidied_marks_df['Name'].apply(lambda x: name_dis_wrapper(x, key))
         
-        print(tidied_marks_df.head())
-        time_series_df = pd.read_csv("{0}/{1}".format(MATHS_TIME_SERIES_PATH, files_dict[excel_filename]))
-        return tidied_marks_df
+    return tidied_marks_df[['Surname', 'Forename', 'Average GCSE score']]
+    
+    
+
+
+def merge_two_dataframes(df1, df2, how = 'inner', merging_on_cols = ['Surname, Forename'],
+                         test_run = False, verbose = False):
+    """
+    Parameters
+    ----------
+    df1 : TYPE dataframe
+        DESCRIPTION.
+    df2 : TYPE dataframe containing data to merge into df1
+        DESCRIPTION.
+    how : TYPE string, optional
+        DESCRIPTION. The default is 'inner'.
+    test_run : TYPE, optional
+        DESCRIPTION. The default is False.
+    verbose : TYPE, optional
+        DESCRIPTION. The default is False.
+
+    Returns
+    -------
+    merged_df : TYPE merged dataframe
+        DESCRIPTION.
+
+    """
+    if test_run:
+        indicator = 'Indicator'
+        how = 'left'
+    else:
+        indicator = False
+        how = how
+    
+    #df1['index'] = df1.index
+    merged_df = pd.merge(df1, df2, how = how, 
+                          left_on = ['Surname', 'Forename'], right_on = ['Surname', 'Forename'], 
+                          indicator = indicator, validate = "1:1")
+    #merged_df.index = merged_df['index']
+    #merged_df.drop('index', inplace = True, axis = 1)
+    
+    if verbose:
+        print("After merging, the first 10 rows of the dataframe are {0}".format(merged_df.head(10)))
+                             
+    if test_run:
+        print("The following names of the first dataframe could not be found in the second dataframe\n {0}\n\n"
+                  .format(merged_df.loc[merged_df[indicator] == 'left_only']['Surname']))
+        print("The following names in the second dataframe could not be found in the first dataframe\n {0}"
+                  .format(merged_df.loc[merged_df[indicator] == 'right_only']['Surname']))
+                                
+    else:
+        #orig#inal_length = len(df.index)
+        #total_dodgy = dodgy_count
+        if verbose:
+            print("Original length of first dataframe was {0}".format(len(df1.index)))
+            print("After merging there are {0} entries\n".format(len(merged_df.index)))
+                     
+    return merged_df
+
+
+def merge_maths_dept_csv_with_GCSE_marks():
+    """
+    * Loads up csv files (converted from pdf using ptesseract etc) and merges with matching maths dept time series file
+    * If 'TEST_RUN' is True, no data is lost and the numbers of entries that do not match up are displayed for each file
+    """
+    
+    TEST_RUN = False
+    
+    for i, csv_marks_filename in enumerate(GCSE_MARKS_TO_MATHS_TIME_SERIES_FILENAMES_DICT.keys()):
         
+        # tidy GCSE marks in readiness for merging
+        GCSE_marks_df = format_maths_GCSE_marks_into_dataframes(csv_marks_filename)
+        
+        # read in time series data for the relevant year
+        csv_year_filename = GCSE_MARKS_TO_MATHS_TIME_SERIES_FILENAMES_DICT[csv_marks_filename]
+        time_series_df = pd.read_csv("{0}/{1}".format(MATHS_TIME_SERIES_PATH, csv_year_filename), index_col = 0)
 
-if __name__ == '__main__':
-    # drop last few rows                        
-    #print(data.iloc[-10:, :8])
-    #last_rows = range(len(data.index) - 1, len(data.index) - 6, -1)
-    #data.drop(last_rows[:], axis = 0, inplace = True)   
-    #print(data.iloc[-10:, :8])
-    data = format_maths_GCSE_marks_into_dataframes(GCSE_MARKS_TO_MATHS_TIME_SERIES_FILENAMES_DICT)
-    pass
+        # merge on surname and forename (one to one basis, can do a test_run to see how much data will be lost)
+        merged_df = merge_two_dataframes(time_series_df, GCSE_marks_df, test_run = TEST_RUN, verbose = True)
+        
+        # store in 'Extracted data files' directory
+        if TEST_RUN:
+            merged_df.to_csv("{0}/Extracted data files/test_merge{1}.csv".format(de.SOURCE_DATA_DIR, i+2016))
+        else:
+            merged_df.to_csv("{0}/Extracted data files/GCSE_marks_merged_with_maths_dept_marks/tests_and_{1}".
+                             format(de.SOURCE_DATA_DIR, csv_marks_filename))
 
+
+def concat_wrapper():
+    # use demaths function to concatenate all GCSE maths dataframes into one csv
+    # will be saved to 'Combined_years' subdirectory of path passed
+    path = "{0}/GCSE_marks_merged_with_maths_dept_marks".format(de.EXTRACTED_DATA_DIR)
+    # load maths test scores and GCSE marks and concatenate
+    filenames = GCSE_MARKS_TO_MATHS_TIME_SERIES_FILENAMES_DICT.keys()
+    filenames = ["tests_and_" + f for f in filenames]
+    
+    demaths.concat_all_csv_files(path, filenames, save = True)
+    
+    
+    
+if __name__ == '__main__':  
+    
+    verbose = True
+    
+    # years paramater can be related to constants at the head of this file
+    relevant_yeargroups = [r.replace(".csv", "") for r in GCSE_MARKS_TO_MATHS_TIME_SERIES_FILENAMES_DICT.values()]
+    years = [year for year in de.ALL_YEARS if len([group for group in relevant_yeargroups if group in year])]
+    
+    
+    # load all GCSE CEM maths grades and predictions for the relevant years 
+    cem_data, removed_rows_summary = de.extract_GCSE_and_midYIS_data(years = years, subject = 'Mathematics', criteria = 'Actual GCSE Points',
+                                            remove_non_numeric_values = True,
+                                            verbose = verbose)
+    
+    # flatten multicolumns
+    cem_data.columns = [d[1] for d in cem_data.columns]
+    cem_data.rename({"Forename" : "Forenames", "Surname" : "Surname caps"}, axis = 1, inplace = True)
+    print(cem_data.head())
+    # remove middle names from forename column and store as lower case for merging
+    cem_data['Forename'] = cem_data['Forenames'].map(lambda x: x.split()[0].lower())
+    # rewrite surname as lower case for merging
+    cem_data['Surname'] = cem_data['Surname caps'].map(lambda x: x.lower())
+    cem_data.drop(['Surname caps', 'Forenames'], axis = 1, inplace = True)
+    
+    # load csv file containing all maths dept marks for all years into dataframe
+    maths_data = pd.read_csv("{0}/GCSE_marks_merged_with_maths_dept_marks/Combined_years/GCSE_years_2016_2017_2018_2019.csv".format(de.EXTRACTED_DATA_DIR),
+                             index_col = 0)
+    
+    merged_df = merge_two_dataframes(maths_data, cem_data, merging_on_cols = ['Surname', 'Forename'], test_run = True, verbose = True)
+    
+    
+        
+        
+        

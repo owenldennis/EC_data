@@ -21,7 +21,7 @@ import numpy as np
 # source data directory from onedrive
 SOURCE_DATA_DIR = "C:/Users/owen/OneDrive - Eastbourne College/School analytics project"
 RESULTS_DIR = "C:/Users/owen/OneDrive - Eastbourne College/School analytics project/Results"
-
+EXTRACTED_DATA_DIR = "{0}/Extracted data files".format(SOURCE_DATA_DIR)
 
 
 # MidYIS excel files are imported as multi-level column dataframes.
@@ -116,6 +116,8 @@ def extract_GCSE_and_midYIS_data(years = ALL_YEARS, subject = 'Mathematics', cri
     #if verbose:
     #    print("years are {0}".format(years))
     #    print("Possible keys are {0}".format(midyis_and_GCSE_data.keys()))
+    
+    
     # pull out specific columns for a dataframe (relates to constants above) and concatenate
     valid_years = select_frames(dict_of_dfs = midyis_and_GCSE_data, keys = years, 
                                  tuples = tuples)

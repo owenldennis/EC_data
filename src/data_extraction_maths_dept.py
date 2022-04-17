@@ -210,29 +210,35 @@ def merge_sheets_for_each_excel_file(excel_titles = USABLE_YEARS, sheet_names = 
         print(pd.DataFrame.from_dict(summary_dict, orient = 'index'))    
 
 
-def concat_all_csv_files(path, join = 'outer', save = False):
+def concat_all_csv_files(path, filenames = [], join = 'outer', save = False):
     
     """
-    * Tries to convert every file in the given path to a dataframe (must be csv files or directories or an exception will be thrown)
+    * Tries to convert every file passed in the given path to a dataframe 
+    * If no filenames are passed then all files in the directory are iterated through - must be csv files or directories or an exception will be thrown)
+    * Each dataframe is given a new column where entries are the name of the original file
     * Files are concatenated and stored in subdirectory 'Combined_years' of the original directory
     * The concatenated dataframe is returned
     *
     """
-
+    
+    if not len(filenames):
+        filenames = os.listdir(path)
+        
     dfs = []
-    files = ""
-    for file in os.listdir(path):
+    filestring = "GCSE_years"
+    
+    for file in filenames:
         try:
             dfs.append(pd.read_csv("{0}/{1}".format(path, file), index_col = 0))
             dfs[-1]['Source file'] = file
-            files = files + '_' + file[5:12]
+            filestring = filestring + '_' + file[22:26]
         except PermissionError:
             print("No permission to access {0} in directory {1}".format(file, path))
         
     df = pd.concat(dfs, join = join, ignore_index = True)
     
     if save:
-        df.to_csv("{0}/Combined_years/years{1}.csv".format(path, files[1:]))
+        df.to_csv("{0}/Combined_years/{1}.csv".format(path, filestring))
     
     return df
 
@@ -240,7 +246,7 @@ def concat_all_csv_files(path, join = 'outer', save = False):
 
 
 if __name__ == '__main__':
-    ### merge sheets from the excel files passed (via 'excel_titles, slightly dodgy!, see note on function)
+    ### merge sheets from the excel filestring passed (via 'excel_titles, slightly dodgy!, see note on function)
     ### sheets are merged based on matching surname and forename
     ### files are saved into the results directory, subdirectory Maths_scores_time_series
     merge_sheets_for_each_excel_file(excel_titles = USABLE_YEARS, sheet_names = ['Yr 9', 'Yr 10', 'Yr 11'], 
