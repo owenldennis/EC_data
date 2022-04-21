@@ -195,7 +195,7 @@ def merge_two_dataframes(df1, df2, how = 'inner', merging_on_cols = ['Surname, F
         print("After merging, the first 10 rows of the dataframe are {0}".format(merged_df.head(10)))
                              
     if test_run:
-        print("The following names of the first dataframe could not be found in the second dataframe\n {0}\n\n"
+        print("The following names from the first dataframe could not be found in the second dataframe\n {0}\n\n"
                   .format(merged_df.loc[merged_df[indicator] == 'left_only']['Surname']))
         print("The following names in the second dataframe could not be found in the first dataframe\n {0}"
                   .format(merged_df.loc[merged_df[indicator] == 'right_only']['Surname']))
@@ -250,7 +250,16 @@ def concat_wrapper():
     
     
     
-if __name__ == '__main__':  
+def merge_all_maths_data():  
+    """
+    relevant CEM years maths data is extracted; all maths scores are loaded; these dataframes are merged
+    results are stored in csv file in the main directory for the project (de.SOURCE_DATA_DIR)
+
+    Returns
+    -------
+    None.
+
+    """
     
     verbose = True
     
@@ -266,20 +275,33 @@ if __name__ == '__main__':
     
     # flatten multicolumns
     cem_data.columns = [d[1] for d in cem_data.columns]
-    cem_data.rename({"Forename" : "Forenames", "Surname" : "Surname caps"}, axis = 1, inplace = True)
-    print(cem_data.head())
+    cem_data.rename({"Forename" : "Forenames", 
+                     "Surname" : "Surname caps",
+                     "Overall Score" : "MidYIS overall score"
+                     }, axis = 1, inplace = True)
+
     # remove middle names from forename column and store as lower case for merging
-    cem_data['Forename'] = cem_data['Forenames'].map(lambda x: x.split()[0].lower())
+    cem_data['Forename'] = cem_data['Forenames'].map(lambda x: x.split()[0].strip().rstrip().lower())
+    
     # rewrite surname as lower case for merging
-    cem_data['Surname'] = cem_data['Surname caps'].map(lambda x: x.lower())
+    cem_data['Surname'] = cem_data['Surname caps'].map(lambda x: x.strip().rstrip().lower())
     cem_data.drop(['Surname caps', 'Forenames'], axis = 1, inplace = True)
     
     # load csv file containing all maths dept marks for all years into dataframe
     maths_data = pd.read_csv("{0}/GCSE_marks_merged_with_maths_dept_marks/Combined_years/GCSE_years_2016_2017_2018_2019.csv".format(de.EXTRACTED_DATA_DIR),
                              index_col = 0)
     
-    merged_df = merge_two_dataframes(maths_data, cem_data, merging_on_cols = ['Surname', 'Forename'], test_run = True, verbose = True)
     
+    length_with_duplicates = len(maths_data.index)
+    # remove pupils with matching forenames and surnames (benjamin walker)
+    maths_data.drop_duplicates(['Surname', 'Forename'], keep = False, inplace = True)
+    length_no_duplicates = len(maths_data.index)
+    removed_names = int((length_with_duplicates - length_no_duplicates)/2)
+    print("{0} name(s) have been completely removed from the maths data since both first and surname were duplicated".format(removed_names))
+    
+    merged_df = merge_two_dataframes(maths_data, cem_data, merging_on_cols = ['Surname', 'Forename'], test_run = False, verbose = True)
+    
+    merged_df.to_csv("{0}/all_maths_data_2016_to_2019.csv".format(de.SOURCE_DATA_DIR))
     
         
         
