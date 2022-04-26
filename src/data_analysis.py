@@ -154,7 +154,62 @@ def lin_reg_from_maths_data(df, dep_col = 'Average GCSE score', ind_cols = ['Fin
     
     return score
 
-if __name__ == "__main__":
+def get_UMS(mark, grade, boundaries):
+    """
+    
+
+    Parameters
+    ----------
+    mark : TYPE float
+        DESCRIPTION. represents a score, must be within the limits of the values in the boundaries dictionary
+    grade : TYPE integer grade, 
+        DESCRIPTION. must be one of the boundaries keys
+    boundaries : TYPE dictionary
+        DESCRIPTION. keys are integers representing grades, values are floats representing lower boundary of each grade
+                     key 0 must represent lowest grade and maximum key is a dummy grade with boundary of the max possible score
+
+    Returns
+    -------
+    TYPE float
+        DESCRIPTION. percentage adjusted for the different sizes of the grade boundaries
+
+    """
+    # deduce grade matching mark from boundaries dictionary
+    
+    # initialise deduced_grade in case mark is 100%
+    deduced_grade = max(boundaries.keys()) - 1
+    # iterate through grade boundaries
+    ordered_grades = list(boundaries.keys())
+    ordered_grades.sort()
+    for level in ordered_grades:
+        if mark < boundaries[level]:
+            deduced_grade = level-1
+            break
+    
+    # the level found should match the grade passed
+    assert(deduced_grade == grade)
+    
+    # boundaries dict inculdes both endpoints (0 and 100%)
+    UMS_grade_gap = 100/(len(boundaries.keys()) - 1)
+    UMS_start = UMS_grade_gap*grade
+    boundary_gap = boundaries[grade+1] - boundaries[grade]
+    
+    print(UMS_grade_gap)
+    print(boundary_gap)
+    return UMS_start + (mark-boundaries[grade])*UMS_grade_gap/boundary_gap
+
+#boundaries = {0: 0, 1: 10, 2: 30, 3: 50, 4:80, 5: 100}
+
+#print(get_UMS(20, 1, boundaries))
+       
+def estimate_boundaries(df_marks_grades_years):
+    grouped = df_marks_grades.groupby('Grade', 'Year')
+    low = {}
+    high = {}
+    
+    
+def do_linear_regression_for_maths_data():
+#if __name__ == "__main__":
     data = pd.read_csv("{0}/all_maths_data_2016_to_2019.csv".format(de.SOURCE_DATA_DIR))
     independent_cols = ['Test 0 Yr 9', 'MidYIS overall score', 'Test 1 Yr 9',
            'Test 2 Yr 9', 'Final test Yr 9', 'Test 0 Yr 10',
