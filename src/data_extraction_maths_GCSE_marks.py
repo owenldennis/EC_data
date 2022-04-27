@@ -33,7 +33,7 @@ GCSE_MARKS_TO_MATHS_TIME_SERIES_FILENAMES_DICT = {'GCSE_scores_2016.csv' : 'Yr 9
 
 CSV_FILES_WITH_TOTAL_MARKS = ['GCSE_scores_2018.csv', 'GCSE_scores_2019.csv']
     
-
+FOUNDATION_PUPILS = [('lucy', 'george'), ('thomas', 'warwick-smith')]
 
 
 ### Given a dataframe and an index, iterates through the rows from that point
@@ -299,10 +299,19 @@ def merge_all_maths_data():
     removed_names = int((length_with_duplicates - length_no_duplicates)/2)
     print("{0} name(s) have been completely removed from the maths data since both first and surname were duplicated".format(removed_names))
     
+    # remove foundation pupils whose results may skew the data: Lucy George and Thomas Warwick-Smith
+    for forename, surname in FOUNDATION_PUPILS:
+        match = maths_data[maths_data['Surname'] == surname.lower()]
+        match = match[match['Forename'] == forename.lower()]
+        maths_data.drop(match.index, inplace = True)
+    
+    # remove 'abs as an indication of absent for a test
+    
+    
     merged_df = merge_two_dataframes(maths_data, cem_data, merging_on_cols = ['Surname', 'Forename'], test_run = False, verbose = True)
     
     merged_df.to_csv("{0}/all_maths_data_2016_to_2019.csv".format(de.SOURCE_DATA_DIR))
     
-        
+#merge_all_maths_data()        
         
         

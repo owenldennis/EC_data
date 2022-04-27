@@ -39,7 +39,8 @@ def lin_reg_wrapper(X, y, display_results = False):
         linreg = LinearRegression().fit(X, y)
         score = linreg.score(X,y)
         if one_feature:
-            r, p = pearsonr(X.reshape(-1),y)
+            r, p = None, None #pearsonr(X.reshape(1,-1),y)
+            pass
         else:
             r, p = None, None
         # could use Kendall-Tau if data is ranked...?
@@ -154,7 +155,7 @@ def lin_reg_from_maths_data(df, dep_col = 'Average GCSE score', ind_cols = ['Fin
     
     return score
 
-def get_UMS(mark, grade, boundaries):
+def get_UMS(mark, grade, all_boundaries, year_key):
     """
     
 
@@ -175,8 +176,8 @@ def get_UMS(mark, grade, boundaries):
 
     """
     # deduce grade matching mark from boundaries dictionary
-    
-    # initialise deduced_grade in case mark is 100%
+    boundaries = all_boundaries[year_key]
+    # initialise deduced_grade as top grade in case mark is 100%
     deduced_grade = max(boundaries.keys()) - 1
     # iterate through grade boundaries
     ordered_grades = list(boundaries.keys())
@@ -187,30 +188,72 @@ def get_UMS(mark, grade, boundaries):
             break
     
     # the level found should match the grade passed
-    assert(deduced_grade == grade)
+    try:
+        assert(deduced_grade == grade)
+    except AssertionError:
+        print("Mark passed is {0}".format(mark))
+        print("Deduced grade is {0}".format(deduced_grade))
+        print("Passed grade is {0}".format(grade))
+        print("Boundaries dict is {0}".format(boundaries))
     
-    # boundaries dict inculdes both endpoints (0 and 100%)
-    UMS_grade_gap = 100/(len(boundaries.keys()) - 1)
+    # boundaries dict inculdes dummy grade at 100%
+    UMS_grade_gap = 100/(max(boundaries.keys()) - 1)
     UMS_start = UMS_grade_gap*grade
     boundary_gap = boundaries[grade+1] - boundaries[grade]
     
-    print(UMS_grade_gap)
-    print(boundary_gap)
+    #print(UMS_grade_gap)
+    #print(boundary_gap)
     return UMS_start + (mark-boundaries[grade])*UMS_grade_gap/boundary_gap
 
 #boundaries = {0: 0, 1: 10, 2: 30, 3: 50, 4:80, 5: 100}
 
 #print(get_UMS(20, 1, boundaries))
        
-def estimate_boundaries(df_marks_grades_years):
-    grouped = df_marks_grades.groupby('Grade', 'Year')
-    low = {}
-    high = {}
+def estimate_boundaries(df):
+    # 'Source file' is a proxy for the GCSE year
+    year_groups = df.groupby(['Source file'])
+    all_boundaries = {}
+    for year in year_groups:
+        # Group into grades
+        grade_groups = year[1].groupby('Actual GCSE Points')
+        # Find lowest and highest marks matching each grade
+        low = {g[0] : min(g[1]['Average GCSE score']) for g in grade_groups}
+        high = {g[0] : max(g[1]['Average GCSE score']) for g in grade_groups}
+        
+        #print(low)
+        #print(high)
+        all_boundaries[year[0]] = {}
+        ordered_grades = [g[0] for g in grade_groups]
+        ordered_grades.sort()
+        
+        for grade in ordered_grades:
     
+            if high.get(grade - 1):
+                # choose random boundary between the two grades based on the available data
+                diff = low[grade] - high[grade - 1]
+                
+                all_boundaries[year[0]][grade] = max(random.randint(0,diff), 1) + high[grade - 1]
+     
+            else:
+                # lowest grade in data - no further inference can be done on lower boundary
+                all_boundaries[year[0]][grade] = low[grade]
+        
+        # ensure there is a dummy grade representing full marks
+        all_boundaries[year[0]][grade + 1] = 100
+        
+    return all_boundaries
     
 def do_linear_regression_for_maths_data():
 #if __name__ == "__main__":
     data = pd.read_csv("{0}/all_maths_data_2016_to_2019.csv".format(de.SOURCE_DATA_DIR))
+    
+    # estimate the grade boundaries from the data
+    all_boundaries = estimate_boundaries(data)
+    # create UMS column based on these boundaries
+    data['UMS'] = data.apply(lambda x: get_UMS(x['Average GCSE score'], x['Actual GCSE Points'], 
+                                               all_boundaries, x['Source file']), axis = 1)
+    
+    dep_col = ['UMS']
     independent_cols = ['Test 0 Yr 9', 'MidYIS overall score', 'Test 1 Yr 9',
            'Test 2 Yr 9', 'Final test Yr 9', 'Test 0 Yr 10',
            'Test 1 Yr 10', 'Test 2 Yr 10', 'Final test Yr 10',
@@ -225,31 +268,32 @@ def do_linear_regression_for_maths_data():
     cols = []
     for i, col in enumerate(selected_cols):
         cols.append(col)
-        scores[cols[-1]] = {'R2 score for single test' : lin_reg_from_maths_data(data, ind_cols = cols[-1]),
-                            'R2 score using all tests to this point' : lin_reg_from_maths_data(data, ind_cols = cols)
+        scores[cols[-1]] = {'R2 score for single test' : lin_reg_from_maths_data(data, dep_col = dep_col, ind_cols = cols[-1]),
+                            'R2 score using all tests to this point' : lin_reg_from_maths_data(data, dep_col = dep_col, ind_cols = cols)
                                        }#['Test 0 Yr 9', 'Final test Yr 9', 'Final test Yr 10', 'Final test Yr 11'])
         collinearity_scores[cols[-1]] = {}
         if i > 0:
             # test for collinearity
             for colj in cols:
-                dep_col = colj
+                dep_colj = colj
                 ind_cols = [c for c in cols if not c == colj]
                 #print("Ind {0}".format(ind_cols))
                 #print("Dep {0}\n".format(dep_col))
-                R2_score = lin_reg_from_maths_data(data, ind_cols = ind_cols,
+                R2_score = lin_reg_from_maths_data(data, dep_col = dep_colj, ind_cols = ind_cols,
                                                    display_plots = False, verbose = False)
                 
                 
             
                 collinearity_scores[colj][i] = 1/(1-R2_score)
-            print("Test: {0} gives: {1}".format(col, collinearity_scores[cols[-1]]))
+            #print("Test: {0} gives: {1}".format(col, collinearity_scores[cols[-1]]))
 
             
             
     df = pd.DataFrame.from_dict(scores, orient = 'index')
     print(df)
     df_collin = pd.DataFrame.from_dict(collinearity_scores, orient = 'index')
-    print(df_collin)
+    #print(df_collin)
+    df_collin.to_csv("{0}/Collinearity_test for maths dept tests.csv".format(de.RESULTS_DIR))
     #df.columns = ['R2 score','Datapoints']
-
+do_linear_regression_for_maths_data()
         
