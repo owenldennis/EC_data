@@ -8,6 +8,7 @@ Created on Tue Mar  8 12:34:21 2022
 import data_extraction as de
 import pandas as pd
 from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import random
 from scipy.stats import pearsonr
@@ -36,8 +37,9 @@ def lin_reg_wrapper(X, y, display_results = False):
             pass
     
     if len(X) > 1:
-        linreg = LinearRegression().fit(X, y)
-        score = linreg.score(X,y)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.3)
+        linreg = LinearRegression().fit(X_train, y_train)
+        score = linreg.score(X_test,y_test)
         if one_feature:
             r, p = None, None #pearsonr(X.reshape(1,-1),y)
             pass
@@ -179,7 +181,7 @@ def get_UMS(mark, grade, all_boundaries, year_key):
     boundaries = all_boundaries[year_key]
     # initialise deduced_grade as top grade in case mark is 100%
     deduced_grade = max(boundaries.keys()) - 1
-    # iterate through grade boundaries
+    # iterate through grade boundaries to deduce grade
     ordered_grades = list(boundaries.keys())
     ordered_grades.sort()
     for level in ordered_grades:
@@ -196,13 +198,16 @@ def get_UMS(mark, grade, all_boundaries, year_key):
         print("Passed grade is {0}".format(grade))
         print("Boundaries dict is {0}".format(boundaries))
     
-    # boundaries dict inculdes dummy grade at 100%
-    UMS_grade_gap = 100/(max(boundaries.keys()) - 1)
+    # either 8 or 9 grades depending on the year
+    UMS_grade_gap = 100/(max(boundaries.keys()))
+    # determine starting UMS score (ie the UMS score for the grade boundary)
     UMS_start = UMS_grade_gap*grade
+    # gap between this grade boundary and the next one up
     boundary_gap = boundaries[grade+1] - boundaries[grade]
     
     #print(UMS_grade_gap)
     #print(boundary_gap)
+    # return the correct UMS score for the mark passed
     return UMS_start + (mark-boundaries[grade])*UMS_grade_gap/boundary_gap
 
 #boundaries = {0: 0, 1: 10, 2: 30, 3: 50, 4:80, 5: 100}
@@ -240,6 +245,12 @@ def estimate_boundaries(df):
         
         # ensure there is a dummy grade representing full marks
         all_boundaries[year[0]][grade + 1] = 100
+        # fill in missing lower grade boundaries (equally spaced between 0 and lowest boundary found)
+        lowest_grade = min(low.keys())
+        missing_grades = range(0, lowest_grade)
+        lowest_mark = all_boundaries[year[0]][lowest_grade]
+        for m in missing_grades:
+            all_boundaries[year[0]][m] = m*lowest_mark/len(missing_grades)
         
     return all_boundaries
     
@@ -250,10 +261,11 @@ def do_linear_regression_for_maths_data():
     # estimate the grade boundaries from the data
     all_boundaries = estimate_boundaries(data)
     # create UMS column based on these boundaries
-    data['UMS'] = data.apply(lambda x: get_UMS(x['Average GCSE score'], x['Actual GCSE Points'], 
-                                               all_boundaries, x['Source file']), axis = 1)
-    
-    dep_col = ['UMS']
+    data['UMS'] = [get_UMS(mark = m, grade = g, year_key = y, all_boundaries = all_boundaries) for (m,g,y) in 
+                   data[['Average GCSE score', 'Actual GCSE Points', 'Source file']].itertuples(index = False)]
+
+                    
+    dep_col = ['Average GCSE score']
     independent_cols = ['Test 0 Yr 9', 'MidYIS overall score', 'Test 1 Yr 9',
            'Test 2 Yr 9', 'Final test Yr 9', 'Test 0 Yr 10',
            'Test 1 Yr 10', 'Test 2 Yr 10', 'Final test Yr 10',
@@ -295,5 +307,8 @@ def do_linear_regression_for_maths_data():
     #print(df_collin)
     df_collin.to_csv("{0}/Collinearity_test for maths dept tests.csv".format(de.RESULTS_DIR))
     #df.columns = ['R2 score','Datapoints']
+    
+    data[['Average GCSE score', 'Actual GCSE Points', 'UMS', 'Source file']].to_csv("{0}/Temp/UMS_test.csv".format(de.SOURCE_DATA_DIR))
+    data.plot.scatter('Source file', 'UMS', c = 'Actual GCSE Points')
 do_linear_regression_for_maths_data()
         
