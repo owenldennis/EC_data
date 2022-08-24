@@ -20,10 +20,10 @@ import numpy as np
 
 # source data directory from onedrive
 SOURCE_DATA_DIR = "C:/Users/owen/OneDrive - Eastbourne College/School analytics project"
-RESULTS_DIR = "C:/Users/owen/OneDrive - Eastbourne College/School analytics project/Results"
+RESULTS_DIR = "{0}/Results".format(SOURCE_DATA_DIR)
 EXTRACTED_DATA_DIR = "{0}/Extracted data files".format(SOURCE_DATA_DIR)
-
-
+MidYIS_GCSE_DATA_FILE = "{0}/MidYIS_average_and_GCSE_scores.xlsm".format(SOURCE_DATA_DIR)
+TEMP_DIR = "{0}/Temp".format(SOURCE_DATA_DIR)
 # MidYIS excel files are imported as multi-level column dataframes.
 
 
@@ -42,19 +42,24 @@ ALL_YEARS = ['Yr 9 2012_13', 'Yr 9 2013_14',  #***all subjects graded 1-8 on CEM
              'Yr 9 2015_16', 'Yr 9 2015_16 (9-1)', #***just a few pupils in maths, history and DT graded 1-8 still*** 
              'Yr 9 2016_17 (9-1)', 'Yr 9 2017_18 (9-1)', 'Yr 9 2018_19 (9-1)' # ***all subjects graded 1-9***  
              ]
-# struture of original midYIS datafiles
+# structure of original midYIS datafiles
 SUBJECTS = ['Art & Design', 'Biology', 'Chemistry', 'Classical Civilisation', 
             'Design & Technology', 'Drama', 'English', 'English Literature', 
             'French', 'Geography', 'German', 'History', 'Latin', 'Mathematics', 
             'Music', 'Physical Education', 'Physics', 'Religious Studies', 'Science (Double)', 'Spanish']
 
-SUBJECT_OPTIONS = ['Actual GCSE Points', 'Cemid', 'Cust', 
+SUBJECT_OPTIONS = ['Actual GCSE Points', 
                    'Overall Band', 'Overall Score', 'Predicted GCSE Points', 
                    'Raw Residual', 'Standardised Residual',]
 
 MIDYIS_OPTIONS = ['Overall Score', 'Overall Band']
 
-PUPIL_INFO_OPTIONS = ['Forename', 'Sex', 'Surname']
+PUPIL_INFO_OPTIONS = ['Forename', 'Sex', 'Surname', 'Cemid', 'Cust',]
+
+PUPIL_TUPLES = [('Pupil Information', h) for h in PUPIL_INFO_OPTIONS[:4]]
+MidYIS_TUPLES = [('MidYIS', 'Overall Score')]
+SUBJECT_TUPLES = [(subject, 'Actual GCSE Points') for subject in SUBJECTS]
+COLUMN_TUPLES = PUPIL_TUPLES + MidYIS_TUPLES + SUBJECT_TUPLES
 
 def select_frames(dict_of_dfs, keys, tuples): 
     
@@ -68,7 +73,7 @@ def select_frames(dict_of_dfs, keys, tuples):
     return valid_years
 
 
-def clean_data(data, subject,  criteria, remove_non_numeric_values = True,
+def clean_data(data, subject, criteria, remove_non_numeric_values = True,
                verbose = False):
     
     raw_length = len(data.index)
@@ -99,7 +104,8 @@ def clean_data(data, subject,  criteria, remove_non_numeric_values = True,
  
 
 
-def extract_GCSE_and_midYIS_data(years = ALL_YEARS, subject = 'Mathematics', criteria = 'Actual GCSE Points',                                 
+def extract_GCSE_and_midYIS_data(years = ALL_YEARS, subject = 'Mathematics', criteria = 'Actual GCSE Points', 
+                                 regression_tuple = ('MidYIS', 'Overall Score'),                              
                                  remove_non_numeric_values = True, verbose = False):
     
     # load all excel sheets from 2012 to 2018
@@ -110,7 +116,7 @@ def extract_GCSE_and_midYIS_data(years = ALL_YEARS, subject = 'Mathematics', cri
 
     
     tuples = [('Pupil Information', 'Surname'),('Pupil Information', 'Forename'),('Pupil Information', 'Sex'),              
-              ('MidYIS', 'Overall Score'), (subject, criteria)
+              regression_tuple, (subject, criteria)
               ]
     # add (subject, criteria) tuple to multicolumn tuples to extract relevant data
     #if verbose:
@@ -143,12 +149,76 @@ def extract_GCSE_and_midYIS_data(years = ALL_YEARS, subject = 'Mathematics', cri
     return data, removed_rows_summary
 
 
+def get_columns_and_flatten(year, column_tuples = COLUMN_TUPLES, excel_file = MidYIS_GCSE_DATA_FILE):
+    # open passed excel file, extract relevant columns and flatten multi-column headings
     
+    df = pd.read_excel(excel_file, sheet_name = year, header = [0,1])
+    # remove any columns not appearing in the spreadsheet
+    column_tuples = [c for c in column_tuples if c in df.columns]
+    # extract desired columns
+    df = df[column_tuples]
+
+    #df.columns = df.columns.to_flat_index() 
+    #df.columns = [' & '.join(col).rstrip('_') for col in df.columns.values]
+    df.columns = [col[1] if col[0] == 'Pupil Information' else col[0] for col in df.columns.values]
     
-    
+    return df
 
 
- 
+def merge_wrapper(dfs_dict, keys_in_order = [], on = ['Forename', 'Surname', 'Sex', 'MidYIS', 'Cemid'], 
+                  test_run = True):   
+    # only merges dataframes created from the first two keys in dfs_dict
+    # specifically used to merge across the split years (when some exams were numeric and some still letter grades)
+    # if test_run is true, the dataframes will be merged with feedback given about number of matching entries etc
+    # if test_run is false, inner merging will happen without checking for lost data
+    
+    # merge dataframes passed with names as keys
+    if len(keys_in_order):
+        names = keys_in_order
+    else:
+        names = list(dfs_dict.keys())
+    if test_run:
+        print("The lengths of the two dataframes about to be merged are:")
+        print("year {0} : {1}".format(names[0], len(dfs_dict[names[0]].index)))
+        print("year {0} : {1}".format(names[1], len(dfs_dict[names[1]].index)))
+        merged_df = dfs_dict[names[0]].merge(dfs_dict[names[1]], how = 'outer', on = on,
+                                 indicator = True)
+        print("There were {0} entries for year {1} that didn't match entries in year {2}".format(
+            len(merged_df[merged_df['_merge'] == 'left_only']),names[0], names[1]))
+        print("There were {0} entries for year {1} that didn't match entries in year {2}".format(
+            len(merged_df[merged_df['_merge'] == 'right_only']),names[1], names[0]))
+        
+        print("The column headings after merging are : {0}".format(merged_df.columns))
+        print("The length of the merged dataframe is {0}".format(len(merged_df.index)))
+        
+        return merged_df
+        
+    else:
+        return dfs_dict[names[0]].merge(dfs_dict[names[1]], how = 'inner', on = on)
+
+    
+def merge_years_wrapper(years, column_tuples = COLUMN_TUPLES, excel_file = MidYIS_GCSE_DATA_FILE,
+                        test_run = False):
+    
+    assert(len(years) == 2)
+    # extract relevant columns from excel file, flatten 
+    
+    dfs = {year : get_columns_and_flatten(year, column_tuples, excel_file) for year in years}
+
+    # pass to merge_wrapper to merge entries 
+    # only merges dataframes created from the first two year keys passed in years list
+    # specifically used to merge across the split years (when some exams were numeric and some still letter grades)
+    # if test_run is true, the dataframes will be merged with feedback given about number of matching entries etc
+    # if test_run is false, inner merging will happen without checking for lost data
+        
+    return merge_wrapper(dfs, test_run = test_run)
+
+    
+    
+#df = get_columns_and_flatten(year = 'Yr 9 2012_13')
+if __name__ == "__main__":
+    df = merge_years_wrapper(years = ['Yr 9 2014_15', 'Yr 9 2014_15 (9-1)'], test_run = True) 
+
         
         
         

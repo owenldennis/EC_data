@@ -14,8 +14,14 @@ import random
 from scipy.stats import pearsonr
 from scipy.stats import ttest_1samp
 from numbers import Number
+import time
 
 import numpy as np
+
+# used for scoring predictions - this is the average width of a grade boundary 
+# could be improved by ensuring it depends on the year/grade
+# UMS scores will be accurate on average (years with 1-8/1-9 grades have a UMS width of 11.1/10 respectively)
+GRADE_WIDTH = 10.5
 
 
 def lin_reg_wrapper(X, y, display_results = False):
@@ -23,7 +29,9 @@ def lin_reg_wrapper(X, y, display_results = False):
     # reshape if X represents one feature only (1 dimensional)
     if isinstance(X[0], Number):
         one_feature = True
+        X_list = X
         X = X.reshape(-1,1)
+        #y = y.reshape(-1,1)
     else:
         one_feature = False
         X = np.array(X)
@@ -39,27 +47,30 @@ def lin_reg_wrapper(X, y, display_results = False):
     if len(X) > 1:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.3)
         linreg = LinearRegression().fit(X_train, y_train)
+        y_pred = linreg.predict(X_test)
+        y_true = y_test
         score = linreg.score(X_test,y_test)
         if one_feature:
-            r, p = None, None #pearsonr(X.reshape(1,-1),y)
-            pass
+            r, p = pearsonr(X_list,y)
+        
         else:
             r, p = None, None
         # could use Kendall-Tau if data is ranked...?
         if display_results:
             print("Standard Regression gives R^2 score of {0:.2f}".format(score))
-            print("Correlation analysis gives r = {0:.2f} with p-value {1:.3f}".format(r,p))
+            #print("Correlation analysis gives r = {0:.2f} with p-value {1:.3f}".format(r,p))
     else:
         if display_results:
             print("Insufficient data for linear regression : {0} datapoints found".format(len(X)))
         score = 'Insufficient data'
-        r = np.nan
-        p = np.nan
+        #r = np.nan
+        #p = np.nan
     
-    return score, r, p
+    return score, r, p, y_true, y_pred
     
     
 def GCSE_on_midYIS_regression(years = de.ALL_YEARS, subject = 'Mathematics', criteria = 'Actual GCSE Points', 
+                              regression_tuple = ('MidYIS', 'Overall Score'),
                               display_results = False, verbose = False):
     """
     
@@ -103,7 +114,7 @@ def GCSE_on_midYIS_regression(years = de.ALL_YEARS, subject = 'Mathematics', cri
     X = data['MidYIS', 'Overall Score'].values
     y = data[subject, criteria].values
     
-    score, r, p = lin_reg_wrapper(X, y, display_results = display_results)
+    score, r, p, y_true, y_pred = lin_reg_wrapper(X, y, display_results = display_results)
         
     return {'Raw data' : data, 'Data clean summary' : removed_rows_summary, 'R2 score' : score, 'R' : r, 'p value' : p}
  
@@ -133,7 +144,7 @@ def test_lin_reg_on_MidYIS():
     
 
 def lin_reg_from_maths_data(df, dep_col = 'Average GCSE score', ind_cols = ['Final test Yr 10'], 
-                            display_plots = False, verbose = False):
+                            tolerance = 1, display_plots = False, verbose = False):
     
     cols = np.append(ind_cols, dep_col) 
     # get rid of NaN values in the relevant columns
@@ -147,15 +158,21 @@ def lin_reg_from_maths_data(df, dep_col = 'Average GCSE score', ind_cols = ['Fin
             df = df[mask == False]
 
     # deal with regression on just one independent variable
-    if len(ind_cols) == 1:
-        ind_cols = ind_cols[0]
+    #if len(ind_cols) == 1:
+    #    ind_cols = ind_cols[0]
         
     y = df[dep_col].values
     X = df[ind_cols].values
     
-    score, r, p = lin_reg_wrapper(X, y, display_results = display_plots)
+    score, r, p, y_true, y_pred = lin_reg_wrapper(X, y, display_results = display_plots)
     
-    return score
+    # calculate proportion of predictions that are within tolerance of the actual mark
+    differences = [t-p for t, p  in list(zip(y_true, y_pred))]
+    #proportion = len([d for d in differences if abs(d) < GRADE_WIDTH*tolerance])/len(differences)
+    mean_error = np.mean(differences)
+    std_error = np.std(differences, ddof = 1)    
+    
+    return round(score, 3), round(mean_error, 3), round(std_error, 3)#round(proportion, 2)
 
 def get_UMS(mark, grade, all_boundaries, year_key):
     """
@@ -263,52 +280,92 @@ def do_linear_regression_for_maths_data():
     # create UMS column based on these boundaries
     data['UMS'] = [get_UMS(mark = m, grade = g, year_key = y, all_boundaries = all_boundaries) for (m,g,y) in 
                    data[['Average GCSE score', 'Actual GCSE Points', 'Source file']].itertuples(index = False)]
-
-                    
-    dep_col = ['Average GCSE score']
+          
+    data['Random data'] = np.random.randint(0, 100, size = len(data.index))
+           
+    dep_col = ['UMS']
     independent_cols = ['Test 0 Yr 9', 'MidYIS overall score', 'Test 1 Yr 9',
            'Test 2 Yr 9', 'Final test Yr 9', 'Test 0 Yr 10',
            'Test 1 Yr 10', 'Test 2 Yr 10', 'Final test Yr 10',
            'Test 0 Yr 11', 'Test 1 Yr 11','Final test Yr 11' ,
-           ]
+           'Random data']
     dodgy_cols = ['Test 3 Yr 9','Test 2 Yr 11','Test 3 Yr 10']
     
     selected_cols = independent_cols#['Final test Yr 9' ,'Final test Yr 10', 'Final test Yr 11']
     
-    scores = {}
-    collinearity_scores = {}
-    cols = []
-    for i, col in enumerate(selected_cols):
-        cols.append(col)
-        scores[cols[-1]] = {'R2 score for single test' : lin_reg_from_maths_data(data, dep_col = dep_col, ind_cols = cols[-1]),
-                            'R2 score using all tests to this point' : lin_reg_from_maths_data(data, dep_col = dep_col, ind_cols = cols)
-                                       }#['Test 0 Yr 9', 'Final test Yr 9', 'Final test Yr 10', 'Final test Yr 11'])
-        collinearity_scores[cols[-1]] = {}
-        if i > 0:
-            # test for collinearity
-            for colj in cols:
-                dep_colj = colj
-                ind_cols = [c for c in cols if not c == colj]
-                #print("Ind {0}".format(ind_cols))
-                #print("Dep {0}\n".format(dep_col))
-                R2_score = lin_reg_from_maths_data(data, dep_col = dep_colj, ind_cols = ind_cols,
-                                                   display_plots = False, verbose = False)
+    dfs = []
+    runs = 100
+    start_time = time.time()
+    
+    for run in range(runs):
+        collinearity_scores = {}
+        cols = []
+        scores = {}
+        print("Run {0} of {1}: time elapsed is {2}".format(run, runs, round(time.time()- start_time, 2)))
+        for i, col in enumerate(selected_cols):
+            cols.append(col)
+            
+            lin_reg_single_test = lin_reg_from_maths_data(data, dep_col = dep_col, ind_cols = cols[-1])
+            lin_reg_all_tests = lin_reg_from_maths_data(data, dep_col = dep_col, ind_cols = cols)
+            
+            scores[cols[-1]] = {'R2 score' : lin_reg_single_test[0],
+                                'M err' : lin_reg_single_test[1],
+                                'Std err' : lin_reg_single_test[2],
+                                'R2 all' : lin_reg_all_tests[0],
+                                'M  all' : lin_reg_all_tests[1],
+                                'Std all' : lin_reg_all_tests[2]
+                                }#['Test 0 Yr 9', 'Final test Yr 9', 'Final test Yr 10', 'Final test Yr 11'])
+        
+            
+            collinearity_scores[cols[-1]] = {}
+            if i > 0:
+                # test for collinearity
+                for colj in cols:
+                    dep_colj = colj
+                    ind_cols = [c for c in cols if not c == colj]
+                    #print("Ind {0}".format(ind_cols))
+                    #print("Dep {0}\n".format(dep_col))
+                    R2_score = lin_reg_from_maths_data(data, dep_col = dep_colj, ind_cols = ind_cols,
+                                                       display_plots = False, verbose = False)[0]
+                    
+                    
                 
-                
+                    collinearity_scores[colj][i] = 1/(1-R2_score)
             
-                collinearity_scores[colj][i] = 1/(1-R2_score)
-            #print("Test: {0} gives: {1}".format(col, collinearity_scores[cols[-1]]))
-
+        df = pd.DataFrame.from_dict(scores, orient = 'index')
+        df['Test'] = df.index
+        dfs.append(df)
+        
             
-            
-    df = pd.DataFrame.from_dict(scores, orient = 'index')
-    print(df)
+    # concatenate all runs into one dataset for PowerBI        
+    results_df = pd.concat(dfs)
+    results_df.index = range(len(results_df.index))
+    
+    
+    
+    # concatenate summary stats over all runs for each test
+    df_list = []
+    for col in independent_cols:
+        series = results_df[results_df['Test'] == col].drop('Test', axis = 1).apply(np.mean)
+        series['Test'] = col
+        df_list.append(series.to_frame().transpose())
+    
+    pd.concat(df_list, ignore_index = True).to_excel(
+        "{0}/BI GCSE marks regressed on tests summary {1} runs.xlsx".format(de.RESULTS_DIR, runs))
+    
+    results_df.to_excel(
+        "{0}/BI GCSE marks regressed on tests raw data {1} runs.xlsx".format(de.RESULTS_DIR, runs))
+    
+    # summarise collinearity scores for final run
     df_collin = pd.DataFrame.from_dict(collinearity_scores, orient = 'index')
-    #print(df_collin)
-    df_collin.to_csv("{0}/Collinearity_test for maths dept tests.csv".format(de.RESULTS_DIR))
+    print(df_collin)
+    df_collin.to_csv("{0}/Collinearity_sample_test for maths dept tests regression.csv".format(de.RESULTS_DIR))
     #df.columns = ['R2 score','Datapoints']
     
-    data[['Average GCSE score', 'Actual GCSE Points', 'UMS', 'Source file']].to_csv("{0}/Temp/UMS_test.csv".format(de.SOURCE_DATA_DIR))
-    data.plot.scatter('Source file', 'UMS', c = 'Actual GCSE Points')
-do_linear_regression_for_maths_data()
-        
+    #data[['Average GCSE score', 'Actual GCSE Points', 'UMS', 'Source file']].to_csv("{0}/Temp/UMS_test.csv".format(de.SOURCE_DATA_DIR))
+    #data.plot.scatter('Source file', 'UMS', c = 'Actual GCSE Points')
+    return results_df, pd.concat(df_list, ignore_index = True)
+if __name__ == '__main__':
+    raw_results_df, summary_df = do_linear_regression_for_maths_data()
+    print(summary_df)
+    #print(results_df)
