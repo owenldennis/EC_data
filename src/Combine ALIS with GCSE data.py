@@ -15,6 +15,7 @@ import pandas as pd
 import numpy as np
 
 ALL_ALIS_FILE = "{0}/all_years.csv".format(ALIS_ext.ALIS_DATA_DIR)
+EXTRACTED_DATA_DIR = "{0}/Extracted data files/Merged_ALIS_and_GCSE_data".format(de.SOURCE_DATA_DIR)
 
 # link from GCSE and MidYIS filenames to matching (hopefully) ALIS data filenames
 YEAR_MATCH = {'Yr 9 2012_13' : '2017.csv',
@@ -27,7 +28,7 @@ midYIS_data_years = de.ALL_YEARS
 
 def pivot_dataframe(df, pivot_index = ['Surname', 'Forename'], 
                     pivot_columns = 'Subject Title ', 
-                    pivot_values = 'A level Grade', 
+                    pivot_values = 'A level Points', 
                     columns_to_drop = ["Subject Title ", 'A level Grade','Exam Type',  'A level Points',
                                          'Syllabus Title', 'Exam Board', 'Syllabus Code'],
                     check_for_errors = True, verbose = False):
@@ -35,12 +36,14 @@ def pivot_dataframe(df, pivot_index = ['Surname', 'Forename'],
     # pivots passed dataframe according to the parameters passed
     # checks for consistency with original if check_for_errors is True
     
+    
     #df = pd.read_csv("{0}/{1}".format(ALIS_ext.ALIS_DATA_DIR, '2017.csv'))
     if check_for_errors:
         df_ref = df.copy()
 
     
     # pivot
+
     new_df = df.pivot(index = pivot_index, columns = pivot_columns, values = pivot_values)
     new_df.reset_index(inplace = True)
        
@@ -58,7 +61,7 @@ def pivot_dataframe(df, pivot_index = ['Surname', 'Forename'],
             surname = df_ref.loc[row_index,['Surname']]['Surname']
             forename = df_ref.loc[row_index,['Forename']]['Forename']
             subject_title = df_ref.loc[row_index, ['Subject Title ']]['Subject Title ']
-            grade = df_ref.loc[row_index, ['A level Grade']]['A level Grade']
+            grade = df_ref.loc[row_index, [pivot_values]][pivot_values]
             
             matching = new_df[new_df['Surname'] == surname]
             matching = matching[matching.Forename == forename]
@@ -67,14 +70,14 @@ def pivot_dataframe(df, pivot_index = ['Surname', 'Forename'],
             try:
                 assert(len(matching.index) == 1)
             except AssertionError:
-                print("Multiple matches for name {0} and subject {1}.".format(forename + " " + surname, subject_title))
+                print("Multiple matches for name {0} and subject {1}.".format(str(forename) + " " + str(surname), subject_title))
                 print("Dataframe of matching entries is {0}\n".format(matching))
                     
             try:
                 assert(matching.iloc[0] == grade)
             except AssertionError:
                 print("Mismatch between grade stored in original dataframe and pivoted dataframe.")
-                print("Row of original dataframe for {1} is \n{0}\n".format(forename + " " + surname + " " + subject_title,
+                print("Row of original dataframe for {1} is \n{0}\n".format(str(forename) + " " + str(surname) + " " + subject_title,
                                                                             df_ref.loc[row_index]))
             if verbose:
                 print("Confirming pivot operation for {0} {1} {2}".format(forename, surname, subject_title))
@@ -86,20 +89,29 @@ def pivot_dataframe(df, pivot_index = ['Surname', 'Forename'],
     return new_df
 
 
-def merge_GCSE_and_ALIS_results(year, MidYIS_file = de.MidYIS_GCSE_DATA_FILE,
-                                remove_AS_results = True, use_points = True, verbose = False):
+def merge_GCSE_and_ALIS_results(year, MidYIS_file = de.MidYIS_GCSE_DATA_FILE, use_all_ALIS_years = False,
+                                remove_AS_results = True, grading_type = 'A level Points', 
+                                test_run = True, store_failed_matches = True, verbose = False):
+    
+    try:
+        assert(not store_failed_matches or test_run)
+    except AssertionError:
+        print("Dataframes of failed matches are only created if test_run is set to True")
     
     dfs = {}
     
     # read in MidYIS and GCSE data for year passed
     # check if the year is one where numeric and alpha grades need to be combined into one dataframe
     if year in ['Yr 9 2014_15', 'Yr 9 2015_16']:
-        dfs["MidYIS data for " + year] = de.merge_years_wrapper(years = [year, year +' (9-1)'], test_run = False)
+        dfs["MidYIS data for " + year] = de.merge_years_wrapper(years = [year, year +' (9-1)'], test_run = False)[0]
     else:
         dfs["MidYIS data for " + year] = de.get_columns_and_flatten(year)
     
     # read in ALIS data for corresponding year
-    ALIS_df = pd.read_csv("{0}/{1}".format(ALIS_ext.ALIS_DATA_DIR, YEAR_MATCH[year]))
+    if use_all_ALIS_years:
+        ALIS_df = pd.read_csv(ALL_ALIS_FILE)
+    else:
+        ALIS_df = pd.read_csv("{0}/{1}".format(ALIS_ext.ALIS_DATA_DIR, YEAR_MATCH[year]))
     
     # remove AS results if required
     if remove_AS_results:
@@ -111,7 +123,7 @@ def merge_GCSE_and_ALIS_results(year, MidYIS_file = de.MidYIS_GCSE_DATA_FILE,
     dfs["ALIS data for " + YEAR_MATCH[year]] = pivot_dataframe(ALIS_df,
                                                     pivot_index = ['Surname', 'Forename'], 
                                                     pivot_columns = 'Subject Title ', 
-                                                    pivot_values = 'A level Grade', 
+                                                    pivot_values = grading_type, 
                                                     columns_to_drop = ["Subject Title ", 'A level Grade','Exam Type',  'A level Points',
                                                                          'Syllabus Title', 'Exam Board', 'Syllabus Code'],
                                                     check_for_errors = True, verbose = verbose)
@@ -120,12 +132,23 @@ def merge_GCSE_and_ALIS_results(year, MidYIS_file = de.MidYIS_GCSE_DATA_FILE,
     #print(dfs["ALIS data for " + YEAR_MATCH[year]]['Surname'].sort_values())
     #print(dfs["ALIS data"].head())
     
-    merged_data = de.merge_wrapper(dfs, on = 'Surname', test_run = True)
+    if True:
+        return dfs
+    [dfs[key].to_csv("{0}/{1}.csv".format(de.TEMP_DIR, key)) for key in dfs.keys()]
+    merged_data, MidYIS_only, ALIS_only = de.merge_wrapper(dfs, keys_in_order = ["MidYIS data for " + year, "ALIS data for " + YEAR_MATCH[year]],
+                                   on = ['Surname', 'Initial'], test_run = test_run)
     
-    merged_data.to_csv("{0}/merged_MidYIS_ALIS.csv".format(de.TEMP_DIR))
+    if store_failed_matches:
+        MidYIS_only.to_csv("{0}/MidYIS_with_no_ALIS_match_{1}".format(EXTRACTED_DATA_DIR, YEAR_MATCH[year]))
+        ALIS_only.to_csv("{0}/ALIS_with_no_MidYIS_match_{1}".format(EXTRACTED_DATA_DIR, YEAR_MATCH[year]))
     
-    return merged_data
+    merged_data.to_csv("{0}/merged_MidYIS_ALIS_{1}".format(EXTRACTED_DATA_DIR, YEAR_MATCH[year]))
+    
+    return dfs
 
 if __name__ == '__main__':
-    year = list(YEAR_MATCH.keys())[1]
-    merge_GCSE_and_ALIS_results(year, verbose = False)
+    for year in YEAR_MATCH.keys():
+        data = merge_GCSE_and_ALIS_results(year, MidYIS_file = de.MidYIS_GCSE_DATA_FILE, use_all_ALIS_years = False,
+                                    remove_AS_results = True, grading_type = 'A level Points', 
+                                    test_run = True, store_failed_matches = True, verbose = False)
+    

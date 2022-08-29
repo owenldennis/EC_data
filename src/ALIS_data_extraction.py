@@ -10,6 +10,7 @@ import data_extraction as de
 
 import numpy as np
 import pandas as pd
+import name_disambiguation as name_dis
 
 ALIS_DATA_DIR = "{0}/Original data files/ALIS data/Value added subject analysis".format(de.SOURCE_DATA_DIR) 
 ALL_ALIS_FILES = ['2017.xls', '2018.xls', '2019.xls', '2020.xls', '2021.xls']
@@ -35,8 +36,8 @@ def read_in_ALIS_file(ALIS_data_dir, filename, verbose = False):
                 axis = 1, inplace = True)
     
     # make surnames and forenames lower case
-    data['Surname'] = data['Surname'].map(lambda x: x.upper())
-    data['Forename'] = data['Forename'].map(lambda x: x.upper())
+    data[['Surname', 'Forename', 'Initial']] = data.apply(name_dis.split_name_wrapper, axis = 1)
+   # data['Forename'] = data['Forename'].map(lambda x: x.lower())
     
     # check for missing data entries in ALIS tests and GCSE average scores
     test_nans = data[data['Adaptive Test (Computer Based)'].isna()]#.loc[:, ['Surname', 'Adaptive Test (Computer Based)', 'A level Grade', 'Average GCSE Points']]

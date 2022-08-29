@@ -16,7 +16,7 @@ from numbers import Number
 import numpy as np
 #import tabula
 #import re
-#import name_disambiguation as name_dis
+import name_disambiguation as name_dis
 
 # source data directory from onedrive
 SOURCE_DATA_DIR = "C:/Users/owen/OneDrive - Eastbourne College/School analytics project"
@@ -153,6 +153,8 @@ def get_columns_and_flatten(year, column_tuples = COLUMN_TUPLES, excel_file = Mi
     # open passed excel file, extract relevant columns and flatten multi-column headings
     
     df = pd.read_excel(excel_file, sheet_name = year, header = [0,1])
+    #print("After reading in:")
+    #print(df['Pupil Information', 'Surname'][0])
     # remove any columns not appearing in the spreadsheet
     column_tuples = [c for c in column_tuples if c in df.columns]
     # extract desired columns
@@ -161,40 +163,59 @@ def get_columns_and_flatten(year, column_tuples = COLUMN_TUPLES, excel_file = Mi
     #df.columns = df.columns.to_flat_index() 
     #df.columns = [' & '.join(col).rstrip('_') for col in df.columns.values]
     df.columns = [col[1] if col[0] == 'Pupil Information' else col[0] for col in df.columns.values]
-    
+    df[['Surname', 'Forename', 'Initial']] = df.apply(lambda x: name_dis.split_name_wrapper(x), axis = 1)
+    #print("After tidying:")
+    #print(df['Surname'][0])
     return df
 
 
 def merge_wrapper(dfs_dict, keys_in_order = [], on = ['Forename', 'Surname', 'Sex', 'MidYIS', 'Cemid'], 
-                  test_run = True):   
+                  test_run = True, verbose = True):   
     # only merges dataframes created from the first two keys in dfs_dict
     # specifically used to merge across the split years (when some exams were numeric and some still letter grades)
     # if test_run is true, the dataframes will be merged with feedback given about number of matching entries etc
     # if test_run is false, inner merging will happen without checking for lost data
-    
+
+
     # merge dataframes passed with names as keys
     if len(keys_in_order):
         names = keys_in_order
     else:
         names = list(dfs_dict.keys())
     if test_run:
+        
+        if verbose:
+            print("The first few ordered entries for each dataframe passed:")
+            [print(dfs_dict[key].head(20).loc[ : ,['Surname', 'Forename']].
+                   sort_values(by = 'Surname', axis = 0)) for key in dfs_dict.keys()]
+            print("Merging on {0}".format(on))
+        
         print("The lengths of the two dataframes about to be merged are:")
         print("year {0} : {1}".format(names[0], len(dfs_dict[names[0]].index)))
         print("year {0} : {1}".format(names[1], len(dfs_dict[names[1]].index)))
+        
         merged_df = dfs_dict[names[0]].merge(dfs_dict[names[1]], how = 'outer', on = on,
                                  indicator = True)
-        print("There were {0} entries for year {1} that didn't match entries in year {2}".format(
-            len(merged_df[merged_df['_merge'] == 'left_only']),names[0], names[1]))
-        print("There were {0} entries for year {1} that didn't match entries in year {2}".format(
-            len(merged_df[merged_df['_merge'] == 'right_only']),names[1], names[0]))
         
-        print("The column headings after merging are : {0}".format(merged_df.columns))
+        left_only = merged_df[merged_df['_merge'] == 'left_only']
+        right_only = merged_df[merged_df['_merge'] == 'right_only']
+        
+        print("There were {0} entries for {1} that didn't match entries in {2}".format(
+            len(left_only.index),names[0], names[1]))
+        print("There were {0} entries for {1} that didn't match entries in {2}".format(
+            len(right_only.index),names[1], names[0]))
+        
+        #print("The column headings after merging are : {0}".format(merged_df.columns))
         print("The length of the merged dataframe is {0}".format(len(merged_df.index)))
         
-        return merged_df
+        return merged_df, left_only, right_only
         
     else:
-        return dfs_dict[names[0]].merge(dfs_dict[names[1]], how = 'inner', on = on)
+        #print("Just before merging: {0} and {1}".format(dfs_dict[names[0]]['Surname'][0], dfs_dict[names[1]]['Surname'][0]))
+       
+        dfs_dict['merged'] = dfs_dict[names[0]].merge(dfs_dict[names[1]], how = 'inner', on = on)
+        #print("Immediately after merging: {0}".format(dfs_dict['merged']['Surname'][0]))
+        return dfs_dict['merged'], pd.DataFrame(), pd.DataFrame()
 
     
 def merge_years_wrapper(years, column_tuples = COLUMN_TUPLES, excel_file = MidYIS_GCSE_DATA_FILE,
@@ -211,14 +232,15 @@ def merge_years_wrapper(years, column_tuples = COLUMN_TUPLES, excel_file = MidYI
     # if test_run is true, the dataframes will be merged with feedback given about number of matching entries etc
     # if test_run is false, inner merging will happen without checking for lost data
         
-    return merge_wrapper(dfs, test_run = test_run)
-
+    return merge_wrapper(dfs, on = ['Forename', 'Surname', 'Initial','Sex', 'MidYIS', 'Cemid'], 
+                         test_run = test_run)
+    
     
     
 #df = get_columns_and_flatten(year = 'Yr 9 2012_13')
 if __name__ == "__main__":
-    df = merge_years_wrapper(years = ['Yr 9 2014_15', 'Yr 9 2014_15 (9-1)'], test_run = True) 
-
+    df = merge_years_wrapper(years = ['Yr 9 2015_16', 'Yr 9 2015_16 (9-1)'], test_run = True)[0]
+    df.to_csv("{0}/test_merge.csv".format(TEMP_DIR))
         
         
         
